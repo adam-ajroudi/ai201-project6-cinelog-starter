@@ -51,13 +51,13 @@ I also updated the service and test so this decision is codified in behavior rat
 
 ## Comment 6 — Rebase
 **What conflicted:**
-The rebase had an add/add conflict in `.gitignore` because `origin/main` already added its own ignore file while my branch added the virtualenv and cache patterns for this workspace. The watchlist code itself rebased cleanly onto the UUID-refactored `main` branch.
+The rebase had an add/add conflict in `.gitignore` because `origin/main` already added its own ignore file while my branch added the virtualenv and cache patterns for this workspace. After the rebase landed on the UUID-refactored `main` branch, the watchlist feature also needed its `WatchlistEntry` model restored on top of those UUID models so the service and tests could import it again.
 
 **How I resolved it:**
-I combined the ignore patterns from both sides so the final file keeps `.pytest_cache/`, `.venv/`, `venv/`, and the database/cache ignores together. After that, the branch replayed onto `main`, which already has UUID `Film.id` values and UUID foreign keys in the model layer, so the watchlist service could continue using `db.session.get(Film, film_id)` without any integer-specific code.
+I combined the ignore patterns from both sides so the final file keeps `.pytest_cache/`, `.venv/`, `venv/`, and the database/cache ignores together. Then I added back a UUID-based `WatchlistEntry` model in `models.py` with `user_id` and `film_id` foreign keys that match the refactored UUID schema from `main`. The watchlist service could then continue using `db.session.get(Film, film_id)` without any integer-specific code.
 
 **How I verified no conflict remains:**
-I checked `git status` after the rebase and confirmed the branch was clean except for the still-uncommitted response doc. I also reviewed `models.py` after the rebase to confirm the UUID-based model definitions from `main` were present, and I reran the watchlist test file and the full test suite after the code settled.
+I checked `git status` after the rebase and confirmed the branch was clean except for the working model/doc edits. I also reviewed `models.py` after the rebase to confirm the UUID-based model definitions from `main` were present and then restored `WatchlistEntry` on top of them, and I reran the watchlist test file and the full test suite after the code settled.
 
 ## PR Description
 This PR adds the watchlist feature to CineLog. Users can add films to a personal watchlist and fetch the list later through the `/watchlist/<user_id>` API. The service now rejects duplicate watchlist entries, returns a clear error when a film does not exist, and keeps watchlists ordered by most recently added first.
