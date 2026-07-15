@@ -3,9 +3,11 @@ from app import create_app, db
 from models import User, Film, WatchlistEntry
 from services.watchlist_service import (
     add_to_watchlist,
+    remove_from_watchlist,
     get_watchlist,
     FilmNotFoundError,
     AlreadyInWatchlistError,
+    NotInWatchlistError,
 )
 
 
@@ -81,3 +83,49 @@ def test_get_watchlist_returns_newest_first(app, sample_user):
 
         assert titles[0] == "Blade Runner"
         assert titles[1] == "Alien"
+
+
+def test_remove_from_watchlist_deletes_entry(app, sample_user, sample_film):
+    """
+    Removing a film that's on the watchlist should delete the entry.
+    """
+    with app.app_context():
+        add_to_watchlist(user_id=sample_user, film_id=sample_film)
+
+        result = remove_from_watchlist(user_id=sample_user, film_id=sample_film)
+        assert result is True
+
+        remaining = WatchlistEntry.query.filter_by(
+            user_id=sample_user, film_id=sample_film
+        ).first()
+        assert remaining is None
+
+
+def test_remove_from_watchlist_not_present_raises(app, sample_user, sample_film):
+    """
+    Removing a film that isn't on the watchlist should raise
+    NotInWatchlistError instead of silently doing nothing.
+    """
+    with app.app_context():
+        with pytest.raises(NotInWatchlistError):
+            remove_from_watchlist(user_id=sample_user, film_id=sample_film)
+
+
+def test_add_to_watchlist_defaults_to_public(app, sample_user, sample_film):
+    """
+    add_to_watchlist() should default new entries to public=True when the
+    caller doesn't specify a visibility.
+    """
+    with app.app_context():
+        entry = add_to_watchlist(user_id=sample_user, film_id=sample_film)
+        assert entry.public is True
+
+
+def test_add_to_watchlist_respects_public_false(app, sample_user, sample_film):
+    """
+    Callers should be able to explicitly opt a watchlist entry into
+    private visibility via the public parameter.
+    """
+    with app.app_context():
+        entry = add_to_watchlist(user_id=sample_user, film_id=sample_film, public=False)
+        assert entry.public is False
