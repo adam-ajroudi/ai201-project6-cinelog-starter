@@ -73,6 +73,12 @@ I combined the ignore patterns from both sides so the final file keeps `.pytest_
 **How I verified no conflict remains:**
 I checked `git status` after the rebase and confirmed the branch was clean except for the working model/doc edits. I also reviewed `models.py` after the rebase to confirm the UUID-based model definitions from `main` were present and then restored `WatchlistEntry` on top of them, and I reran the watchlist test file and the full test suite after the code settled.
 
+## Commit History
+
+Rewritten via `git rebase -i` into one logical change per commit, all using conventional commit prefixes (`feat:`, `fix:`, `test:`, `docs:`). Screenshot below is `git log --oneline main..HEAD` — scoped to just the commits on this branch, so it excludes `bbe206c` (the `chore/add-gitignore` merge that's part of upstream `main`'s own history, not something I merged) and confirms there are no merge commits in my work:
+
+![git log --oneline main..HEAD showing 11 conventional commits with no merge commits](screenshot_milestone_4.png)
+
 ## PR Description
 This PR adds the watchlist feature to CineLog. Users can add films to a personal watchlist, remove them, and fetch the list later through the `/watchlist/<user_id>` API. The service rejects duplicate watchlist entries, returns a clear error when a film does not exist or when removing an entry that isn't present, keeps watchlists ordered by most recently added first, and lets callers set an entry's visibility explicitly via a `public` flag (defaulting to `True`).
 
