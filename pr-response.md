@@ -49,6 +49,20 @@ I agree with the maintainer's point that many users want to see what they added 
 
 I also updated the service and test so this decision is codified in behavior rather than living only in the PR discussion.
 
+## Stretch — remove_from_watchlist()
+**What I did:**
+Added `remove_from_watchlist(user_id, film_id)` to `services/watchlist_service.py`, following the same shape as `remove_from_collection()` in `services/collection_service.py`: look up the `WatchlistEntry` by `user_id`/`film_id`, raise a new `NotInWatchlistError` if it isn't found (mirroring `NotInCollectionError`), otherwise delete it and return `True`. Wired up a matching `DELETE /watchlist/<user_id>/remove` route in `routes/watchlist/watchlist.py`, mirroring `DELETE /collection/<user_id>/remove` — same body shape (`{ "film_id": "<uuid>" }`), same 404-on-missing-entry / 200-on-success behavior.
+
+**How I verified:**
+Added two tests in `tests/test_watchlist.py`: `test_remove_from_watchlist_deletes_entry` (removing a present entry deletes it from the DB) and `test_remove_from_watchlist_not_present_raises` (removing an absent entry raises `NotInWatchlistError` rather than silently no-op'ing). Ran `pytest tests/ -v` to confirm all pass alongside the existing suite.
+
+## Stretch — Visibility toggle endpoint
+**What I did:**
+Added a `public` parameter to `add_to_watchlist(user_id, film_id, public=True)`, defaulting to `True` to match the Comment 4 decision, but letting callers explicitly opt an entry into `public=False`. Updated the `POST /watchlist/<user_id>/add` route to read `public` from the request body via `data.get("public", True)`, so a caller can send `{ "film_id": "<uuid>", "public": false }` to save a private entry without changing the default behavior for existing callers who don't send the field.
+
+**How I verified:**
+Added `test_add_to_watchlist_defaults_to_public` (confirms the default is `True` when omitted) and `test_add_to_watchlist_respects_public_false` (confirms an explicit `False` is persisted). Ran the full suite to confirm no regressions.
+
 ## Comment 6 — Rebase
 **What conflicted:**
 The rebase had an add/add conflict in `.gitignore` because `origin/main` already added its own ignore file while my branch added the virtualenv and cache patterns for this workspace. After the rebase landed on the UUID-refactored `main` branch, the watchlist feature also needed its `WatchlistEntry` model restored on top of those UUID models so the service and tests could import it again.
@@ -60,7 +74,7 @@ I combined the ignore patterns from both sides so the final file keeps `.pytest_
 I checked `git status` after the rebase and confirmed the branch was clean except for the working model/doc edits. I also reviewed `models.py` after the rebase to confirm the UUID-based model definitions from `main` were present and then restored `WatchlistEntry` on top of them, and I reran the watchlist test file and the full test suite after the code settled.
 
 ## PR Description
-This PR adds the watchlist feature to CineLog. Users can add films to a personal watchlist and fetch the list later through the `/watchlist/<user_id>` API. The service now rejects duplicate watchlist entries, returns a clear error when a film does not exist, and keeps watchlists ordered by most recently added first.
+This PR adds the watchlist feature to CineLog. Users can add films to a personal watchlist, remove them, and fetch the list later through the `/watchlist/<user_id>` API. The service rejects duplicate watchlist entries, returns a clear error when a film does not exist or when removing an entry that isn't present, keeps watchlists ordered by most recently added first, and lets callers set an entry's visibility explicitly via a `public` flag (defaulting to `True`).
 
 Design decisions documented in this PR:
 
@@ -72,7 +86,10 @@ Manual testing steps:
 
 1. Start the app with `python app.py`.
 2. Create or reuse a valid `user_id` and `film_id` from the seeded database.
-3. Send `POST /watchlist/<user_id>/add` with `{ "film_id": "<uuid>" }` and confirm it returns `201`.
+3. Send `POST /watchlist/<user_id>/add` with `{ "film_id": "<uuid>" }` and confirm it returns `201` with `"public": true` in the response.
 4. Send the same request again and confirm it returns `409` for a duplicate watchlist entry.
-5. Send `GET /watchlist/<user_id>` and confirm the returned list contains the saved film data with watchlist metadata.
-6. Run `pytest tests/ -v` to verify the service and test coverage still pass.
+5. Send `POST /watchlist/<user_id>/add` with a different `film_id` and `{ "film_id": "<uuid>", "public": false }` and confirm the response has `"public": false`.
+6. Send `GET /watchlist/<user_id>` and confirm the returned list contains the saved film data with watchlist metadata, newest-added first.
+7. Send `DELETE /watchlist/<user_id>/remove` with `{ "film_id": "<uuid>" }` for an entry that exists and confirm it returns `200`.
+8. Repeat the same `DELETE` request and confirm it now returns `404` since the entry no longer exists.
+9. Run `pytest tests/ -v` to verify the service and test coverage still pass (10 tests).
